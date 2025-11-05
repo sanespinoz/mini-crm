@@ -1,0 +1,78 @@
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mini-crm-app
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - mysql
+      - redis
+    ports:
+      - "8000:8000"
+    command: bash -c "composer install && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000"
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mini-crm-queue
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - redis
+      - mysql
+    command: bash -lc "composer install || true; php artisan queue:work --queue=contacts --sleep=3 --tries=3"
+
+
+  mysql:
+    image: mysql:8.0
+    container_name: mini-crm-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mini_crm
+      MYSQL_USER: sail
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: mini-crm-redis
+    ports:
+      - "6379:6379"
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: mini-crm-phpmyadmin
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: sail
+      PMA_PASSWORD: password
+      UPLOAD_LIMIT: 100M
+    ports:
+      - "8081:80"
+  reverb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mini-crm-reverb
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - redis
+    command: bash -lc "composer install || true; php artisan reverb:start"
+    ports:
+      - "8080:8080"
+
+volumes:
+  dbdata:
