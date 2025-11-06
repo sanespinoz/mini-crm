@@ -1,101 +1,205 @@
-# Desafio Técnico – Mini CRM de Contatos
+# Mini CRM - Setup e Execução
 
-Construa uma pequena API REST em Laravel para gerenciar contatos e acompanhar, em tempo real, a evolução do score desses contatos quando um processamento assíncrono for executado.
+Este projeto é otimizado para **Laravel + Docker + Node.js** e utiliza **queues** e **Reverb** para processamento de scores em tempo real.
 
-A solução **deve** demonstrar o uso de:
+Pré-requisitos
 
-- CRUD completo (HTTP JSON)  
-- **Form Requests** para validação de entrada  
-- **API Resources** para serialização de saída  
-- **Jobs** (dispatch + queue worker)  
-- **Observers**  
-- **Events & Listeners**  
-- **Laravel Reverb** (broadcasting em tempo real)  
-
-
-## 1. Escopo Funcional
-
-### Modelo `Contact`
-
-| Campo        | Tipo                 | Regras / Default                           |
-|--------------|----------------------|--------------------------------------------|
-| `id`         | bigint / PK          | auto-increment                             |
-| `name`       | string               | obrigatório                                |
-| `email`      | string único         | obrigatório \| formato e-mail              |
-| `phone`      | string               | obrigatório                                |
-| `score`      | integer              | default **0**                              |
-| `processed_at` | timestamp nullable | preenchido após processamento do score     |
-| Timestamps   | `created_at`, `updated_at`, `deleted_at` (soft delete)            |
-
-### Endpoints CRUD
-
-| Método | Rota                      | Ação                     |
-|--------|---------------------------|--------------------------|
-| POST   | `/api/contacts`           | Criar contato            |
-| GET    | `/api/contacts`           | Listar contatos          |
-| GET    | `/api/contacts/{id}`      | Mostrar contato          |
-| PUT    | `/api/contacts/{id}`      | Atualizar contato        |
-| DELETE | `/api/contacts/{id}`      | Excluir contato (soft)   |
-
-### Fluxo Processar Score
-
-1. Endpoint
-   POST /api/contacts/{id}/process-score
-
-2. A rota dispatcha o job `ProcessContactScore` na fila contacts.
-
-3. O job (simule carga pesada com `sleep(2)` ou cálculo aleatório) deve:
-
-   * Atribuir um score aleatório entre 0 – 100.
-   * Atualizar `processed_at`.
-   * Disparar o evento `ContactScoreProcessed`.
-
-4. **Listener**
-
-   * Gravar em `storage/logs/contact.log` ➜ **ID, email, novo score, timestamp**.
-
-5. **Broadcast** via **Reverb**
-
-   * Canal público: `contacts.{id}`.
-   * Front-end conectado recebe o objeto atualizado em tempo real.
+- Docker e Docker Compose instalados
+- Node.js >= 18
+- Composer
+- NPM ou Yarn
 
 ---
 
-## 2. Requisitos Técnicos
+## 1. Clonar o repositório
 
-| Área               | Detalhes                                                                                                                                                                   |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Queues**         | Use **Redis**. <br/>Comando sugerido:<br/>`php artisan queue:work --queue=contacts`                                                  |
-| **Reverb**         | Inicie com:<br/>`php artisan reverb:start`<br/>Inclua no README um exemplo JavaScript de assinatura do canal.                      |
-| **Form Requests**  | Crie classes específicas para **store** e **update** garantindo validação centralizada.                                             |
-| **API Resources**  | Serialize todas as respostas JSON (inclusive erros) usando **Laravel Resource** / **Resource Collection**.                          |
-| **Observer**       | `ContactObserver`<br/>• `saving` → normalizar telefone (somente dígitos).<br/>• `created` → logar criação.                          |
-| **Autenticação**   | Opcional — bônus se utilizar **Laravel Passport**.                                                                                   |
-| **Documentação**   | Este README deve explicar:<br/>• Setup (Laravel Sail ou Docker).<br/>• Como rodar o worker e o Reverb.<br/>• Exemplo de escuta de canal em JS. |
+```bash
+git clone <URL_DO_REPOSITORIO>
+cd mini-crm
+```
+
+## 2. Copie o arquivo de exemplo do .env
+
+```bash
+cp .env.example .env
+
+```
+
+## 3. Edite o .env com as suas configurações locais, incluindo
+
+APP_NAME=Laravel
+APP_ENV=local
+APP_KEY=base64:...
+APP_URL=http://localhost:8000
+
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
+DB_DATABASE=mini_crm
+DB_USERNAME=sail
+DB_PASSWORD=password
+
+CACHE_DRIVER=file
+QUEUE_CONNECTION=redis
+REDIS_HOST=redis
+SESSION_DRIVER=file
+
+BROADCAST_DRIVER=reverb
+REVERB_APP_KEY=...
+REVERB_HOST=localhost
+REVERB_PORT=8080
+REVERB_SCHEME=http
+
+VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"
+VITE_REVERB_HOST=localhost
+VITE_REVERB_PORT="${REVERB_PORT}"
+VITE_REVERB_SCHEME=http
+VITE_BACKEND_URL=http://localhost:8000
+
+## 4. Levantar os contêineres Docker
+
+```bash
+docker compose up -d 
+```
+
+> Isso irá levantar os serviços: Laravel (PHP), MySQL, Redis, etc.
+
+
+## 5. Instalar dependências Node.js
+
+```bash
+docker exec -it mini-crm-app npm install
+```
+
+## 6. Configurar o ambiente
+
+```bash
+cp .env.example .env
+docker exec -it mini-crm-app php artisan key:generate
+```
+
+> Configure no `.env` os dados de conexão com MySQL, Redis e Reverb, se necessário.
+
+## 7. Executar migrations e seeders
+
+```bash
+docker exec -it mini-crm-app php artisan migrate --seed
+```
+
+> Isso irá criar as tabelas no banco e popular dados iniciais, como contatos de teste.
+
+## 8. Instalar dependências JS
+
+```bash
+docker exec -it mini-crm-app npm install
+docker exec -it mini-crm-app npm run dev
+
+```
+
+## 9. Levantar o worker de queues
+
+```bash
+docker exec -it mini-crm-app php artisan queue:work --queue=contacts
+```
+
+> O worker processa os jobs de score dos contatos.
+
+## 10. Iniciar Reverb (WebSocket)
+
+```bash
+docker exec -it mini-crm-app php artisan reverb:start
+```
+
+> Reverb é usado para notificar o frontend em tempo real quando o score de um contato é processado.
+
+## 11. Rodar o servidor Laravel
+
+```bash
+docker exec -it mini-crm-app php artisan serve --host=0.0.0.0 --port=8000
+```
+
+## 12. Rodar o front-end (Vite)
+
+```bash
+docker exec -it mini-crm-app npm run dev
+```
+
+> Isso compila os arquivos JS/CSS e permite usar o frontend com Hot Reload.
 
 ---
 
-## 3. Critérios de Avaliação
+## 13. Testando os endpoints (Postman)
 
-| ✅ | Critério                                                                                         |
-|----|--------------------------------------------------------------------------------------------------|
-|    | Uso correto de **Form Requests** e **API Resources**                                             |
-|    | Emprego adequado de **Jobs, Events, Listeners e Observers**                                      |
-|    | **Broadcast** funcionando via Reverb                                                             |
-|    | Estrutura e organização do código                                                                |
-|    | Qualidade dos **testes** e cobertura do fluxo principal                                          |
-|    | Clareza da documentação e **facilidade de setup**      
-     
+POST http://localhost:8000/api/contacts/{id}/process-score
+
+Resposta esperada:
+{
+    "status": "success",
+    "message": "Score processing has begun.",
+    "data": null
+}
+
+CRUD de contatos
+Endpoints principales
+
+GET /api/contacts → Listado de contactos
+
+GET /api/contacts/{id} 
+
+POST /api/contacts 
+
+PUT /api/contacts/{id} 
+
+DELETE /api/contacts/{id} (softdelete)
+
+POST /api/contacts/{id}/process-score
+
+
+Todos os endpoints retornam respostas em formato JSON, utilizando recursos da API para garantir consistência.
+---
+
+## 14. Exemplo de escuta de canal em JS
+
+No frontend, você pode escutar os updates de um contato assim:
+
+```js
+const contactId = 1; // Id do contato que deseja escutar
+const channel = window.reverb.channel(`contacts.${contactId}`);
+
+channel.listen((payload) => {
+    console.log("Contato atualizado:", payload);
+});
+```
+
+> Esse código só funciona se o Reverb estiver rodando e o frontend conectado ao WebSocket.
 
 ---
 
-## 4. Entrega
+## 15. Executando testes
 
-1. **Clone** este repositório e implemente sua solução.
-2. Faça *commit* em uma branch (`main` ou `develop`) e **publique**.
-3. Prazo de entrega: **1 SEMANA** (máx).
-   Concentre-se em qualidade, não em escopo extra.
+```bash
+docker exec -it mini-crm-app php artisan test
+```
+
+Cobre:
+
+CRUD de contatos (com soft delete)
+
+Form Requests e API Resources
+
+Observer (saving e created)
+
+Dispatcher do job de processamento de score
+
+Atualização de score no banco
+
+Logging no arquivo contacts.log
 
 ---
 
-Boa sorte 🚀
+## Observações
+
+* Certifique-se de que **worker** e **Reverb** estão sempre ativos para processar scores e enviar notificações.
+* Logs de criação e updates de contatos são gravados em `storage/logs/contacts.log`.
+* O endpoint `/api/contacts/{id}/process-score` processa o score de um contato específico.
+

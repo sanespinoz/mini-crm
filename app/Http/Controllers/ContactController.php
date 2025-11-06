@@ -12,6 +12,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use App\Jobs\ProcessContactScore;
 
+
 class ContactController extends Controller
 {
     use ApiResponse;
@@ -52,10 +53,13 @@ class ContactController extends Controller
 
     public function processScore($id)
     {
-        $contact = Contact::findOrFail($id);
+        try {
+            $contact = Contact::findOrFail($id);
+            ProcessContactScore::dispatch($contact)->onQueue('contacts');
 
-        ProcessContactScore::dispatch($contact)->onQueue('contacts');
-
-        return $this->success(null, 'Score processing has begun.');
+            return $this->success(null, 'Score processing has begun.');
+        } catch (ModelNotFoundException $e) {
+            return $this->error('Contact not found', 404);
+        }
     }
 }

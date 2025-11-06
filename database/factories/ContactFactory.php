@@ -12,8 +12,8 @@ class ContactFactory extends Factory
             'name'          => $this->faker->name(),
             'email'         => $this->faker->unique()->safeEmail(),
             'phone'         => $this->faker->phoneNumber(),
-            'score'         => $this->faker->numberBetween(0, 100),
-            'processed_at'  => $this->faker->optional()->dateTimeBetween('-1 month', 'now'),
+            'score'         => 0,
+            'processed_at'  => null,
         ];
     }
 }
